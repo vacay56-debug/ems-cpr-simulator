@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>TPS-EMS · 韌性急救訓練模擬系統</title>
+<style>
+  :root{
+    --bg:#06070d; --bg2:#0a0c14; --panel:#0d1019; --panel2:#111524;
+    --line:#1b2030; --line2:#2a3147; --ink:#e8ecf6; --muted:#8a93ad; --dim:#5c647d;
+    --ecg:#19f08a; --pleth:#2ad4ff; --abp:#ff4d5e; --co2:#ffd54a; --nibp:#cdd4e6;
+    --cpr:#7c8dff; --pace:#ffffff; --alarm:#ff3b5c; --ok:#19f08a; --warn:#ffb020;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,"Noto Sans Mono CJK TC",monospace;
+    --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(900px 600px at 18% -8%, #18103a55, transparent 60%),
+      radial-gradient(800px 700px at 105% 10%, #07203a66, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .mono{font-family:var(--mono)}
+  button{font-family:var(--sans);cursor:pointer}
+  button:focus-visible{outline:2px solid var(--pleth);outline-offset:2px}
+
+  /* ---------- 啟動畫面 ---------- */
+  #boot{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(1000px 700px at 50% -10%, #1a1140, #06070d 60%);}
+  .boot-card{width:min(620px,92vw);background:linear-gradient(180deg,#0f1322,#0a0d17);
+    border:1px solid var(--line2);border-radius:20px;padding:30px 30px 26px;
+    box-shadow:0 40px 120px #000a,0 0 0 1px #ffffff08 inset;}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.18em;
+    color:#9fe3c4;background:#10271d;border:1px solid #1d5c41;border-radius:999px;padding:5px 12px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ecg);box-shadow:0 0 10px var(--ecg)}
+  .boot-card h1{margin:16px 0 4px;font-size:26px;letter-spacing:.01em}
+  .boot-card .sub{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:18px}
+  .roles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+  .role{background:var(--panel2);border:1px solid var(--line2);border-radius:14px;padding:14px 12px;text-align:left;
+    color:var(--ink);transition:.15s}
+  .role:hover{border-color:var(--pleth);transform:translateY(-2px)}
+  .role.sel{border-color:var(--ecg);box-shadow:0 0 0 1px var(--ecg),0 0 24px #19f08a33}
+  .role .ic{font-size:22px}
+  .role .t{font-weight:700;margin-top:6px}
+  .role .d{color:var(--muted);font-size:12px;margin-top:3px;line-height:1.5}
+  .field{display:flex;gap:10px;align-items:center;margin:6px 0 16px}
+  .field label{font-size:13px;color:var(--muted);white-space:nowrap}
+  .field input{flex:1;background:#070a12;border:1px solid var(--line2);color:var(--ink);
+    border-radius:10px;padding:11px 12px;font-family:var(--mono);font-size:15px;letter-spacing:.12em}
+  .start{width:100%;background:linear-gradient(180deg,#1ce98c,#0fae66);color:#04150d;border:0;
+    font-weight:800;font-size:16px;padding:14px;border-radius:12px;box-shadow:0 10px 30px #19f08a33}
+  .start:hover{filter:brightness(1.06)}
+  .disclaimer{margin-top:14px;font-size:11.5px;color:var(--dim);line-height:1.6;
+    border-top:1px solid var(--line);padding-top:12px}
+
+  /* ---------- 主介面 ---------- */
+  #app{display:none;height:100%;flex-direction:column;padding:10px;gap:10px}
+  .topbar{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,#0e1220,#0a0d17);
+    border:1px solid var(--line);border-radius:14px;padding:9px 14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px;font-family:var(--mono);letter-spacing:.16em;font-size:13px;color:#cfe9df}
+  .pill{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line2);
+    border-radius:999px;padding:3px 9px}
+  .pill b{color:var(--ink)}
+  .rhythm-tag{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:.05em;
+    padding:4px 11px;border-radius:8px;background:#10271d;color:var(--ecg);border:1px solid #1d5c41}
+  .rhythm-tag.shock{background:#2a1116;color:#ff8a98;border-color:#7a2230}
+  .clock{font-family:var(--mono);font-size:18px;color:var(--ink);letter-spacing:.06em}
+  .tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .tab{background:var(--panel2);border:1px solid var(--line2);color:var(--muted);
+    border-radius:10px;padding:8px 13px;font-size:13px;font-weight:600}
+  .tab.on{color:#04150d;background:linear-gradient(180deg,#1ce98c,#11b06b);border-color:#1ce98c}
+  .tab.alert{border-color:var(--alarm);color:#ffb3bf}
+
+  .stage{flex:1;display:grid;grid-template-columns:1fr 360px;gap:10px;min-height:0}
+  .monitor{background:linear-gradient(180deg,#0b0e18,#080a12);border:1px solid var(--line);
+    border-radius:16px;padding:10px;display:flex;flex-direction:column;min-height:0;position:relative;overflow:hidden}
+  .monitor::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,#ffffff03 0 1px,transparent 1px 3px);opacity:.4}
+  .mhead{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:#7d88a3;
+    letter-spacing:.14em;padding:2px 4px 8px}
+  .live{display:inline-flex;align-items:center;gap:6px;background:#ff324d;color:#fff;font-weight:700;
+    border-radius:6px;padding:2px 8px;font-size:11px;font-family:var(--sans);letter-spacing:.05em}
+  .live .d{width:7px;height:7px;background:#fff;border-radius:50%;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.2}}
+  .waves{flex:1;display:grid;grid-template-rows:repeat(4,1fr);gap:6px;min-height:0}
+  .wrow{position:relative;border-bottom:1px solid #141a2a;min-height:0}
+  .wlabel{position:absolute;left:6px;top:5px;font-family:var(--mono);font-size:12px;font-weight:700;z-index:2;letter-spacing:.04em}
+  .wsub{position:absolute;right:8px;top:6px;font-family:var(--mono);font-size:10px;color:var(--dim);z-index:2}
+  canvas{display:block;width:100%;height:100%}
+  .cprbar{margin-top:8px;border-top:1px solid #141a2a;padding-top:8px;display:grid;
+    grid-template-columns:1fr 220px;gap:10px;align-items:center}
+  .cprwave{position:relative;height:72px}
+  .cprmeta{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+  .cprmeta .big{font-size:22px;color:var(--ink);font-weight:700}
+  .qual{display:flex;align-items:center;gap:8px}
+  .qring{--p:0;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;
+    background:conic-gradient(var(--ok) calc(var(--p)*1%),#1b2233 0);position:relative}
+  .qring::after{content:"";position:absolute;inset:5px;border-radius:50%;background:#0a0d17}
+  .qring b{position:relative;z-index:1;font-size:13px;color:var(--ink)}
+
+  /* 右側生命徵象 */
+  .vitals{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
+  .vbox{background:linear-gradient(180deg,#0d111d,#0a0d17);border:1px solid var(--line);
+    border-radius:14px;padding:10px 12px;position:relative}
+  .vbox.alarm{border-color:var(--alarm);box-shadow:0 0 0 1px var(--alarm),0 0 22px #ff3b5c33;animation:apulse 1s infinite}
+  @keyframes apulse{50%{box-shadow:0 0 0 1px var(--alarm),0 0 8px #ff3b5c22}}
+  .vtop{display:flex;justify-content:space-between;align-items:baseline}
+  .vname{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.06em}
+  .vlim{font-family:var(--mono);font-size:10px;color:var(--dim);text-align:right;line-height:1.3}
+  .vval{font-family:var(--mono);font-weight:800;font-size:46px;line-height:1;margin-top:2px}
+  .vsmall{font-size:26px}
+  .vunit{font-size:14px;color:var(--muted);font-weight:600;margin-left:6px}
+  .vsub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+
+  /* ---------- 控制甲板 ---------- */
+  .deck{background:linear-gradient(180deg,#0e1220,#0a0d17);border:1px solid var(--line);
+    border-radius:16px;padding:12px;height:248px;overflow:auto}
+  .deck h3{margin:0 0 10px;font-size:13px;color:var(--muted);letter-spacing:.08em;font-weight:700;
+    display:flex;align-items:center;gap:8px}
+  .grid{display:grid;gap:10px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{background:var(--panel2);border:1px solid var(--line2);color:var(--ink);
+    border-radius:10px;padding:9px 13px;font-size:13px;font-weight:600}
+  .seg button.on{background:#142a3b;border-color:var(--pleth);color:#bdeaff}
+  .btn{background:var(--panel2);border:1px solid var(--line2);color:var(--ink);border-radius:10px;
+    padding:10px 14px;font-size:13px;font-weight:600}
+  .btn:hover{border-color:var(--line2);filter:brightness(1.1)}
+  .btn.charge{background:linear-gradient(180deg,#ffb020,#e08f00);color:#1c1200;border:0;font-weight:800}
+  .btn.shock{background:linear-gradient(180deg,#ff3b5c,#cc2440);color:#fff;border:0;font-weight:800;
+    box-shadow:0 8px 24px #ff3b5c44}
+  .btn.shock:disabled{background:#2a2030;color:#6b5a66;box-shadow:none;cursor:not-allowed}
+  .btn.green{background:linear-gradient(180deg,#1ce98c,#0fae66);color:#04150d;border:0;font-weight:800}
+  .btn.ghost{background:transparent}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .energy{display:flex;align-items:center;gap:10px}
+  .energy .j{font-family:var(--mono);font-size:34px;font-weight:800;color:var(--warn);min-width:96px}
+  .energy .j small{font-size:14px;color:var(--muted)}
+  .drugs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .drug{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:10px;text-align:left}
+  .drug .n{font-weight:700;font-size:13px}
+  .drug .dose{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+  .drug:hover{border-color:var(--ecg)}
+  .slider{display:grid;grid-template-columns:96px 1fr 64px;gap:10px;align-items:center;margin:7px 0}
+  .slider label{font-size:13px;color:var(--muted)}
+  .slider input[type=range]{width:100%;accent-color:var(--pleth)}
+  .slider .v{font-family:var(--mono);font-size:14px;text-align:right;color:var(--ink)}
+  .scen{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .scen button{text-align:left;background:var(--panel2);border:1px solid var(--line2);color:var(--ink);
+    border-radius:12px;padding:10px 12px;font-size:13px}
+  .scen button:hover{border-color:var(--alarm)}
+  .scen .d{font-size:11px;color:var(--muted);margin-top:3px}
+
+  /* 事件記錄 */
+  .log{font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--muted);max-height:150px;overflow:auto}
+  .log .t{color:var(--dim)}
+  .log .ev{color:var(--ink)}
+  .log .sh{color:var(--alarm)}
+  .log .dg{color:var(--co2)}
+  .log .gd{color:var(--ecg)}
+
+  /* ---------- 覆蓋層：12導程 / 報告 ---------- */
+  .overlay{position:fixed;inset:0;z-index:40;display:none;background:#04060bdd;backdrop-filter:blur(6px);
+    padding:16px;overflow:auto}
+  .overlay.show{display:block}
+  .ov-card{max-width:1100px;margin:0 auto;background:linear-gradient(180deg,#0b0e18,#080a12);
+    border:1px solid var(--line2);border-radius:18px;padding:18px}
+  .ov-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .ov-head h2{margin:0;font-size:18px}
+  .x{background:var(--panel2);border:1px solid var(--line2);color:var(--ink);border-radius:10px;
+    width:38px;height:38px;font-size:18px}
+  .ecg12{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:#0a0d15;border-radius:10px;
+    padding:6px;border:1px solid #141a2a}
+  .lead{position:relative;height:120px;border:1px solid #11304d33;border-radius:6px;
+    background:linear-gradient(0deg,#0d1422,#0a1018)}
+  .lead .lbl{position:absolute;left:6px;top:4px;font-family:var(--mono);font-size:11px;color:#7fe0ff;z-index:2}
+  .rep-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .rep-card{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:12px}
+  .rep-card .k{font-size:12px;color:var(--muted)}
+  .rep-card .v{font-family:var(--mono);font-size:26px;font-weight:800;margin-top:4px}
+  .rep-card .v small{font-size:13px;color:var(--muted)}
+  .rep-line{height:8px;background:#1b2233;border-radius:6px;overflow:hidden;margin-top:6px}
+  .rep-line i{display:block;height:100%}
+  .timeline{font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--muted);
+    background:#080b12;border:1px solid #141a2a;border-radius:10px;padding:12px;max-height:200px;overflow:auto}
+
+  .net{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px}
+  .net .d{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+  .net.live .d{background:var(--ecg);box-shadow:0 0 8px var(--ecg)}
+
+  .tapcpr{position:fixed;right:18px;bottom:18px;z-index:30;width:118px;height:118px;border-radius:50%;
+    background:radial-gradient(circle at 50% 35%,#8b9bff,#3d4cc0);color:#fff;border:0;font-weight:800;
+    font-size:15px;box-shadow:0 14px 40px #4250d066;display:none;line-height:1.2}
+  .tapcpr:active{transform:scale(.94)}
+  .tapcpr small{display:block;font-size:11px;font-weight:600;opacity:.85;margin-top:2px}
+
+  .hint{font-size:11px;color:var(--dim);margin-top:4px}
+  @media (max-width:920px){
+    .stage{grid-template-columns:1fr;}
+    .vitals{flex-direction:row;overflow:auto}
+    .vbox{min-width:150px}
+    .deck{height:auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 啟動畫面 ============ -->
+<div id="boot">
+  <div class="boot-card">
+    <span class="badge"><span class="dot"></span>TPS-EMS · ROSC DEFIB MONITOR</span>
+    <h1>韌性急救訓練模擬系統</h1>
+    <div class="sub">瀏覽器即開、免安裝、免硬體。電擊器、12 導程 ECG、生理監視器、CPR 生理連動、ACLS 藥效引擎與教官遙控，整合於同一平台。</div>
+
+    <div class="roles">
+      <button class="role sel" data-role="solo">
+        <div class="ic">🧰</div><div class="t">單機合一</div>
+        <div class="d">一台裝置同時操作監視器與出題，最適合自我演練。</div>
+      </button>
+      <button class="role" data-role="trainee">
+        <div class="ic">🩺</div><div class="t">學員端</div>
+        <div class="d">只顯示病患監視器，由教官端遠端出題。</div>
+      </button>
+      <button class="role" data-role="instructor">
+        <div class="ic">📱</div><div class="t">教官端</div>
+        <div class="d">第二台裝置遙控：設定心律、生命徵象、注入情境事件。</div>
+      </button>
+    </div>
+
+    <div class="field" id="codeField">
+      <label>場次代碼</label>
+      <input id="sessCode" maxlength="6" placeholder="例如 ER1234" value="">
+      <button class="btn ghost" id="genCode" type="button">隨機</button>
+    </div>
+
+    <button class="start" id="startBtn">啟動模擬</button>
+    <div class="disclaimer">⚠️ 本系統僅供到院前緊急救護（Emergency Medical Services, EMS）情境演練與教學討論使用，所有波形、藥效與轉復機率皆為簡化模型，<b>不得</b>作為真實臨床判讀、處置或診斷依據。</div>
+  </div>
+</div>
+
+<!-- ============ 主介面 ============ -->
+<div id="app">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>TPS-EMS</div>
+    <span class="rhythm-tag" id="rhythmTag">竇性節律</span>
+    <span class="pill">場次 <b id="codeShow">—</b></span>
+    <span class="net" id="netStat"><span class="d"></span><span id="netTxt">單機</span></span>
+    <span class="clock mono" id="clock">00:00</span>
+    <div class="tabs">
+      <button class="tab on" data-tab="resus">急救操作</button>
+      <button class="tab" data-tab="drug">用藥</button>
+      <button class="tab" data-tab="ecg12">12 導程</button>
+      <button class="tab" data-tab="ctrl" id="ctrlTab">教官出題</button>
+      <button class="tab" data-tab="report">品質報告</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <!-- 監視器 -->
+    <div class="monitor">
+      <div class="mhead">
+        <span class="live"><span class="d"></span>LIVE 示範</span>
+        <span>TPS-EMS · ROSC DEFIB MONITOR</span>
+      </div>
+      <div class="waves">
+        <div class="wrow"><span class="wlabel" style="color:var(--ecg)">II</span><span class="wsub" id="ecgGain">×1.0  25mm/s</span><canvas id="cEcg"></canvas></div>
+        <div class="wrow"><span class="wlabel" style="color:var(--pleth)">Pleth</span><canvas id="cPleth"></canvas></div>
+        <div class="wrow"><span class="wlabel" style="color:var(--abp)">ABP</span><canvas id="cAbp"></canvas></div>
+        <div class="wrow"><span class="wlabel" style="color:var(--co2)">CO₂</span><span class="wsub">mmHg</span><canvas id="cCo2"></canvas></div>
+      </div>
+      <div class="cprbar">
+        <div class="cprwave"><span class="wlabel" style="color:var(--cpr)">CPR</span><span class="wsub" id="cprMode">手動模擬</span><canvas id="cCpr"></canvas></div>
+        <div class="cprmeta">
+          <div class="qual">
+            <div class="qring" id="qring"><b id="qpct">—</b></div>
+            <div>
+              <div>灌流品質</div>
+              <div class="big"><span id="cprRate">0</span><span style="font-size:13px;color:var(--muted)"> /min</span></div>
+              <div>深度 <span id="cprDepth">0.0</span> cm</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 生命徵象 -->
+    <div class="vitals">
+      <div class="vbox" id="vHR"><div class="vtop"><span class="vname" style="color:var(--ecg)">HR</span><span class="vlim">120<br>50</span></div><div class="vval" style="color:var(--ecg)" id="hr">0</div><div class="vsub" id="hrSub">bpm · 監測中</div></div>
+      <div class="vbox" id="vSpO2"><div class="vtop"><span class="vname" style="color:var(--pleth)">SpO₂</span><span class="vlim">100<br>90</span></div><div class="vval" style="color:var(--pleth)" id="spo2">—</div><div class="vsub">%</div></div>
+      <div class="vbox" id="vABP"><div class="vtop"><span class="vname" style="color:var(--abp)">ABP</span><span class="vlim">160<br>90</span></div><div class="vval vsmall" style="color:var(--abp)"><span id="abpSys">--</span>/<span id="abpDia">--</span></div><div class="vsub">mmHg (MAP <span id="map">--</span>)</div></div>
+      <div class="vbox" id="vNIBP"><div class="vtop"><span class="vname" style="color:var(--nibp)">NIBP</span><span class="vlim mono" id="nibpAge">--:--</span></div><div class="vval vsmall" style="color:var(--nibp)"><span id="nibpSys">---</span>/<span id="nibpDia">---</span></div><div class="vsub" id="nibpSub">mmHg · 按下測量</div></div>
+      <div class="vbox" id="vCO2"><div class="vtop"><span class="vname" style="color:var(--co2)">EtCO₂</span><span class="vlim">50<br>30</span></div><div class="vval vsmall" style="color:var(--co2)" id="etco2">0</div><div class="vsub">mmHg · RR <span id="rr">0</span></div></div>
+    </div>
+  </div>
+
+  <!-- 控制甲板 -->
+  <div class="deck" id="deck"></div>
+</div>
+
+<!-- 大圓 CPR 鈕（學員/單機） -->
+<button class="tapcpr" id="tapCpr">按壓<small>空白鍵也可<br>100–120/分</small></button>
+
+<!-- 12 導程覆蓋層 -->
+<div class="overlay" id="ov12">
+  <div class="ov-card">
+    <div class="ov-head"><h2>12 導程心電圖 · <span id="ov12rhythm" class="mono"></span></h2><button class="x" data-close="ov12">×</button></div>
+    <div class="ecg12" id="ecg12"></div>
+    <div class="hint" id="ecg12hint"></div>
+  </div>
+</div>
+
+<!-- 報告覆蓋層 -->
+<div class="overlay" id="ovRep">
+  <div class="ov-card">
+    <div class="ov-head"><h2>CPR 與急救品質報告</h2><button class="x" data-close="ovRep">×</button></div>
+    <div id="repBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   TPS-EMS 急救訓練模擬器
+   架構：狀態 → 心律/波形產生 → 渲染 → 生命徵象 → CPR → 除顫 → 用藥 → 教官同步
+   所有數值皆為訓練簡化模型，非臨床依據。
+   ========================================================= */
+
+const $ = s=>document.querySelector(s);
+const $$ = s=>Array.from(document.querySelectorAll(s));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const now=()=>performance.now();
+
+/* ---------- 心律定義 ---------- */
+const RHYTHMS = {
+  nsr:        {name:"竇性節律", short:"NSR",  hr:78,  shockable:false, organized:true,  pulse:true},
+  sinus_brady:{name:"竇性心搏過緩", short:"S.BRADY", hr:44, shockable:false, organized:true, pulse:true},
+  sinus_tach: {name:"竇性心搏過速", short:"S.TACH", hr:128, shockable:false, organized:true, pulse:true},
+  afib:       {name:"心房顫動", short:"AF",   hr:130, shockable:false, organized:true,  pulse:true, irregular:true},
+  svt:        {name:"陣發性上心室頻脈", short:"SVT", hr:188, shockable:false, organized:true, pulse:true},
+  vt:         {name:"心室頻脈（無脈）", short:"pVT", hr:190, shockable:true,  organized:true, pulse:false, wide:true},
+  vt_pulse:   {name:"心室頻脈（有脈）", short:"VT", hr:170, shockable:false, organized:true, pulse:true, wide:true},
+  torsades:   {name:"尖端扭轉型室速", short:"TdP", hr:240, shockable:true, organized:false, pulse:false, wide:true},
+  vfib:       {name:"心室顫動", short:"VF",   hr:0,   shockable:true,  organized:false, pulse:false},
+  asystole:   {name:"心搏停止", short:"ASYS", hr:0,   shockable:false, organized:false, pulse:false},
+  pea:        {name:"無脈性電氣活動", short:"PEA", hr:48, shockable:false, organized:true, pulse:false},
+  avb3:       {name:"完全房室傳導阻滯", short:"3°AVB", hr:38, shockable:false, organized:true, pulse:true, chb:true},
+  stemi:      {name:"急性心肌梗塞（STEMI）", short:"STEMI", hr:96, shockable:false, organized:true, pulse:true, st:0.35},
+  rosc:       {name:"自發循環恢復（ROSC）", short:"ROSC", hr:104, shockable:false, organized:true, pulse:true},
+};
+
+/* ---------- 全域狀態 ---------- */
+const S = {
+  role:"solo", code:"", net:false, seqOut:0, seqIn:-1,
+  rhythm:"nsr",
+  hr:78, hasPulse:true, spo2:98, sys:120, dia:80, etco2:38, rr:14,
+  nibpSys:null, nibpDia:null, nibpAt:null,
+  pace:{on:false, rate:70, mA:0, thresh:65, capturing:false},
+  defMode:"manual", energy:150, charged:false,
+  cpr:{active:false, lastT:0, intervals:[], rate:0, depth:0, quality:0, comps:0, sumCompMs:0, startedAt:0},
+  drugs:[],
+  running:true, startT:now(),
+  // 報告統計
+  stat:{shocks:0, firstShockT:null, drugLog:[], roscT:null, arrestStart:null, compTotal:0, compInRange:0, depthOk:0, cprActiveMs:0, lastCprToggle:0},
+};
+
+/* ---------- 波形時鐘 ---------- */
+const clk = {beatT0:0, rr:60/78, atrialT0:0, atrialRR:60/78, respT0:0, respRR:60/14, master:0, shockFlash:0, vfSeed:Math.random()*100};
+
+function effRhythm(){ return RHYTHMS[S.rhythm]; }
+
+/* 依心律設定基本生命徵象 */
+function applyRhythmDefaults(key, keepVitals){
+  const r = RHYTHMS[key]; S.rhythm = key;
+  if(!keepVitals){
+    S.hr = r.hr;
+    S.hasPulse = r.pulse;
+    if(r.pulse){
+      S.spo2 = key==="rosc"?92:(key==="stemi"?95:97);
+      S.sys = key==="sinus_brady"?108:(key==="rosc"?96:(r.short==="VT"?86:118));
+      S.dia = Math.round(S.sys*0.62);
+      S.etco2 = 36; S.rr = key==="svt"?20:14;
+    } else {
+      S.spo2 = 0; S.sys=0; S.dia=0; S.etco2 = (key==="asystole")?0:8; S.rr=0;
+    }
+  }
+  S.pace.capturing=false; S.pace.on=false; S.pace.mA=0;
+  if(!r.pulse && !S.stat.arrestStart) S.stat.arrestStart = now();
+  if(r.pulse) {/* 有脈 */}
+  syncRhythmTag();
+}
+function syncRhythmTag(){
+  const r=effRhythm(); const t=$("#rhythmTag");
+  t.textContent=r.name; t.className="rhythm-tag"+(r.shockable?" shock":"");
+  $("#ov12rhythm").textContent=r.short;
+}
+
+/* =========================================================
+   波形形態函數（傳回相對振幅，0 為等電位線）
+   ========================================================= */
+function gauss(t,c,w,a){ const x=(t-c)/w; return a*Math.exp(-x*x/2); }
+
+// ECG：以「自 beat 起算的秒數 te」與該拍 RR 計算
+function ecgMorph(te, rr, key){
+  const r=RHYTHMS[key];
+  if(key==="vfib"){ return vfWave(clk.master); }
+  if(key==="asystole"){ return Math.sin(clk.master*0.4)*0.02 + (Math.random()-0.5)*0.01; }
+  if(key==="torsades"){
+    const env=Math.sin(clk.master*1.6); // 振幅起伏 → 紡錘狀
+    return Math.sin(clk.master*30)*0.55*env + (Math.random()-0.5)*0.04;
+  }
+  let v=0;
+  const wide = r.wide;
+  // P 波（房室分離時由心房節律另算；此處 organized 且非 wide/chb 才有 P）
+  if(!wide && !r.chb && key!=="svt" && key!=="pea"){
+    v += gauss(te,0.10,0.022,0.16);
+  }
+  if(key==="afib"){ v += (Math.random()-0.5)*0.05; } // 細顫基線、無 P
+  // QRS
+  const qc=0.20;
+  if(wide){
+    v += gauss(te,qc-0.02,0.05,-0.18);
+    v += gauss(te,qc+0.02,0.060,1.25);
+    v += gauss(te,qc+0.10,0.06,-0.30);
+  } else {
+    v += gauss(te,qc-0.018,0.010,-0.12);
+    v += gauss(te,qc,0.013,1.25);
+    v += gauss(te,qc+0.020,0.012,-0.28);
+  }
+  // ST / T
+  const st = r.st||0;
+  v += st*( te>qc+0.03 && te<qc+0.18 ? 1 : 0 );
+  v += gauss(te, wide?qc+0.30:qc+0.34, wide?0.10:0.07, wide?-0.45:0.34);
+  return v;
+}
+function vfWave(t){
+  const s=clk.vfSeed;
+  return 0.45*Math.sin(t*11+s)+0.28*Math.sin(t*19.7+s*2)+0.2*Math.sin(t*7.3+s*0.5)
+       +0.14*Math.sin(t*29+s)+ (Math.random()-0.5)*0.10;
+}
+
+// Pleth（指尖脈波）：與脈搏同步，振幅依灌流
+function plethMorph(te, rr, perf){
+  if(perf<=0) return (Math.random()-0.5)*0.015; // 無脈，僅雜訊
+  const up = gauss(te,0.18,0.07,1.0);
+  const dicrotic = gauss(te,0.40,0.06,0.28); // 重搏切跡
+  return (up+dicrotic)*perf;
+}
+// ABP（動脈壓波形）：對應到 dia~sys，無脈時平直或顯示按壓
+function abpMorph(te, rr, hasPulse){
+  if(hasPulse){
+    const sys=gauss(te,0.16,0.05,1.0);
+    const dic=gauss(te,0.36,0.05,0.32);
+    return clamp(0.12+0.88*(sys+dic),0,1.15);
+  }
+  return 0.06; // 平直低壓
+}
+// CO₂（capnograph 方波）：依呼吸相位
+function co2Morph(tr, rr, level){
+  if(level<=0) return 0;
+  const frac=tr/rr;
+  // 吸氣→快速上升→平台→快速下降
+  let y;
+  if(frac<0.10) y=0;
+  else if(frac<0.18) y=(frac-0.10)/0.08;
+  else if(frac<0.62) y=1 - (frac-0.18)*0.06; // 緩升平台
+  else if(frac<0.70) y=clamp(1-(frac-0.62)/0.08,0,1);
+  else y=0;
+  return clamp(y,0,1)*level;
+}
+
+/* =========================================================
+   Canvas 渲染（sweep 掃描模式）
+   ========================================================= */
+const PX_PER_SEC = 170;       // 掃描速度
+const channels = {};
+function setupCanvas(id, color, baseline, ampPx, fn){
+  const cv=$("#"+id); const ctx=cv.getContext("2d");
+  channels[id]={cv,ctx,color,baseline,ampPx,fn,x:0,lastY:null,w:0,h:0};
+}
+function resizeCanvases(){
+  for(const k in channels){
+    const c=channels[k]; const r=c.cv.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    c.cv.width=Math.max(2,r.width*dpr); c.cv.height=Math.max(2,r.height*dpr);
+    c.ctx.setTransform(dpr,0,0,dpr,0,0);
+    c.w=r.width; c.h=r.height; c.x=0; c.lastY=null;
+    c.ctx.clearRect(0,0,c.w,c.h);
+  }
+}
+
+function sampleChannels(){
+  // 回傳目前 master/相位下各通道之 y 值（0..h）
+  const r=effRhythm();
+  const te=clk.master - clk.beatT0;
+  const tr=clk.master - clk.respT0;
+  const perf = S.hasPulse ? clamp(S.spo2/100,0,1) : (S.cpr.active?0.18:0);
+  let ecgVal;
+  if(r.chb){
+    // 房室分離：P 波獨立、QRS 為寬大逸搏
+    const ta=clk.master-clk.atrialT0;
+    const p=gauss(ta,0.10,0.024,0.16);
+    const qrs = (function(){
+      const qc=0.20;
+      return gauss(te,qc-0.02,0.05,-0.16)+gauss(te,qc+0.02,0.06,1.1)+gauss(te,qc+0.1,0.06,-0.28)+gauss(te,qc+0.32,0.10,-0.4);
+    })();
+    ecgVal=p+qrs;
+  } else {
+    ecgVal = ecgMorph(te, clk.rr, S.rhythm);
+  }
+  if(S.pace.capturing){ // 節律器奪獲：尖波 + 寬大 QRS
+    if(te<0.012) ecgVal += 1.4; // pacing spike
+  }
+  if(clk.shockFlash>0){ ecgVal += (Math.random()-0.5)*1.6; }
+  return {
+    cEcg: ecgVal,
+    cPleth: plethMorph(te, clk.rr, perf),
+    cAbp: abpMorph(te, clk.rr, S.hasPulse),
+    cCo2: co2Morph(tr, clk.respRR, (S.etco2/50)),
+  };
+}
+
+/* 推進心臟/呼吸相位（在像素迴圈中以 dtPx 呼叫） */
+function advancePhase(dt){
+  clk.master += dt;
+  if(clk.shockFlash>0) clk.shockFlash=Math.max(0,clk.shockFlash-dt);
+  const r=effRhythm();
+  // 心室節律
+  let beatRate;
+  if(S.pace.on && S.pace.mA>=S.pace.thresh){ beatRate=S.pace.rate; S.pace.capturing=true; }
+  else { S.pace.capturing=false; beatRate = r.organized? S.hr : 0; }
+  if(r.chb){ beatRate = S.pace.capturing? S.pace.rate : (S.hr||38); }
+
+  if(beatRate>0 && (r.organized || S.pace.capturing)){
+    if(clk.master - clk.beatT0 >= clk.rr){
+      clk.beatT0 += clk.rr;
+      // 下一拍 RR
+      let base=60/beatRate;
+      if(r.irregular) base*=rnd(0.62,1.45);
+      clk.rr=base;
+      onBeat();
+    }
+  } else { clk.beatT0 = clk.master; clk.rr = 1e9; }
+
+  // 心房節律（完全阻滯時 P 波獨立，約 80/min）
+  if(r.chb){
+    const arr=60/82;
+    if(clk.master-clk.atrialT0>=arr){ clk.atrialT0+=arr; }
+  } else clk.atrialT0=clk.beatT0;
+
+  // 呼吸
+  const rrate = S.rr>0? S.rr : 0;
+  if(rrate>0){
+    clk.respRR=60/rrate;
+    if(clk.master-clk.respT0>=clk.respRR){ clk.respT0+=clk.respRR; }
+  } else clk.respT0=clk.master;
+}
+function onBeat(){ /* 可掛載心音/節拍，目前供統計擴充 */ }
+
+/* 主渲染迴圈 */
+let lastFrame=now();
+function frame(){
+  const t=now(); let dt=(t-lastFrame)/1000; lastFrame=t;
+  dt=Math.min(dt,0.05);
+  if(S.running){
+    const pxAdv = PX_PER_SEC*dt;
+    const dtPx = 1/PX_PER_SEC;
+    let steps=Math.max(1,Math.round(pxAdv));
+    for(let i=0;i<steps;i++){
+      advancePhase(dtPx);
+      const samp=sampleChannels();
+      for(const id in channels){
+        const c=channels[id]; if(!(id in samp)) continue;
+        const y=c.baseline - samp[id]*c.ampPx;
+        c.x+=1; if(c.x>=c.w){ c.x=0; c.lastY=null; }
+        // 清除前方
+        c.ctx.clearRect(c.x, 0, 14, c.h);
+        if(c.lastY!=null){
+          c.ctx.strokeStyle=c.color; c.ctx.lineWidth=1.7; c.ctx.shadowColor=c.color; c.ctx.shadowBlur=6;
+          c.ctx.beginPath(); c.ctx.moveTo(c.x-1,c.lastY); c.ctx.lineTo(c.x,clamp(y,1,c.h-1)); c.ctx.stroke();
+          c.ctx.shadowBlur=0;
+        }
+        c.lastY=clamp(y,1,c.h-1);
+      }
+    }
+    renderCprWave(dt);
+    updateCprMetrics(dt);
+  }
+  updateVitalsUI();
+  scheduleClock();
+  requestAnimationFrame(frame);
+}
+
+/* =========================================================
+   CPR 引擎
+   ========================================================= */
+const cprCh={x:0,lastY:null};
+function renderCprWave(dt){
+  const c=channels.cCpr; if(!c) return;
+  const active=S.cpr.active;
+  const steps=Math.max(1,Math.round(PX_PER_SEC*dt));
+  for(let i=0;i<steps;i++){
+    c.x+=1; if(c.x>=c.w){c.x=0;c.lastY=null;}
+    c.ctx.clearRect(c.x,0,14,c.h);
+    let y=c.h-6;
+    if(active && S.cpr.rate>0){
+      const f=(clk.master*(S.cpr.rate/60))%1;
+      const d=Math.sin(f*Math.PI); // 每次按壓一個峰
+      y=c.h-6-d*(c.h-14)*clamp(S.cpr.depth/5.5,0.2,1.1);
+    }
+    if(c.lastY!=null){
+      c.ctx.strokeStyle="#7c8dff"; c.ctx.lineWidth=1.8; c.ctx.shadowColor="#7c8dff"; c.ctx.shadowBlur=7;
+      c.ctx.beginPath(); c.ctx.moveTo(c.x-1,c.lastY); c.ctx.lineTo(c.x,y); c.ctx.stroke(); c.ctx.shadowBlur=0;
+    }
+    c.lastY=y;
+  }
+}
+function compress(){
+  if(!S.cpr.active){ startCpr(); }
+  const t=now();
+  if(S.cpr.lastT){
+    const iv=t-S.cpr.lastT;
+    if(iv>180 && iv<2000){
+      S.cpr.intervals.push(iv); if(S.cpr.intervals.length>8) S.cpr.intervals.shift();
+      const avg=S.cpr.intervals.reduce((a,b)=>a+b,0)/S.cpr.intervals.length;
+      S.cpr.rate=Math.round(60000/avg);
+    }
+  }
+  S.cpr.lastT=t;
+  // 深度：模擬 4.5–6.0，依節奏穩定度微調
+  S.cpr.depth=clamp(rnd(4.6,5.8),0,7);
+  S.cpr.comps++; S.stat.compTotal++;
+  if(S.cpr.rate>=100 && S.cpr.rate<=120) S.stat.compInRange++;
+  if(S.cpr.depth>=5 && S.cpr.depth<=6) S.stat.depthOk++;
+  // 無脈時，按壓驅動 EtCO₂ 與一點點 ABP
+  if(!S.hasPulse){
+    S.etco2=clamp(S.etco2 + 0.6, 0, qualityFactor()*22+6);
+  }
+}
+function startCpr(){
+  S.cpr.active=true; S.cpr.startedAt=now(); S.stat.lastCprToggle=now();
+  log("ev","開始胸部按壓"); pushStatus();
+}
+function stopCpr(){
+  if(S.cpr.active){ S.stat.cprActiveMs+=now()-S.stat.lastCprToggle; }
+  S.cpr.active=false; S.cpr.rate=0; S.cpr.depth=0; log("ev","暫停按壓");
+}
+function qualityFactor(){
+  // 速率 100–120 與穩定度 → 0..1
+  if(!S.cpr.active||S.cpr.rate===0) return 0;
+  const rateScore=1-clamp(Math.abs(110-S.cpr.rate)/40,0,1);
+  let cv=0; if(S.cpr.intervals.length>2){
+    const m=S.cpr.intervals.reduce((a,b)=>a+b,0)/S.cpr.intervals.length;
+    const sd=Math.sqrt(S.cpr.intervals.reduce((a,b)=>a+(b-m)**2,0)/S.cpr.intervals.length);
+    cv=clamp(sd/m,0,1);
+  }
+  const stab=1-cv;
+  return clamp(0.55*rateScore+0.45*stab,0,1);
+}
+let lastComp=0;
+function updateCprMetrics(dt){
+  // 超過 1.5 秒沒按壓 → 視為停止
+  if(S.cpr.active && now()-S.cpr.lastT>1500){ stopCpr(); }
+  S.cpr.quality=Math.round(qualityFactor()*100);
+  // 無脈且未按壓：EtCO₂ 緩降
+  if(!S.hasPulse && !S.cpr.active){ S.etco2=clamp(S.etco2-dt*1.5,0,40); }
+}
+
+/* =========================================================
+   生命徵象 UI
+   ========================================================= */
+function updateVitalsUI(){
+  const r=effRhythm();
+  $("#hr").textContent = r.organized||S.pace.capturing ? Math.round(S.pace.capturing?S.pace.rate:S.hr) : 0;
+  $("#hrSub").textContent = S.pace.capturing? "bpm · 節律器奪獲" : (r.organized?"bpm":"bpm · 無電氣節律");
+  $("#spo2").textContent = S.hasPulse? Math.round(S.spo2) : "--";
+  if(S.hasPulse){ $("#abpSys").textContent=Math.round(S.sys); $("#abpDia").textContent=Math.round(S.dia);
+    $("#map").textContent=Math.round((S.sys+2*S.dia)/3);
+  } else { $("#abpSys").textContent="--"; $("#abpDia").textContent="--"; $("#map").textContent="--"; }
+  $("#etco2").textContent=Math.round(S.etco2);
+  $("#rr").textContent=S.rr;
+  // NIBP
+  if(S.nibpSys){ $("#nibpSys").textContent=S.nibpSys; $("#nibpDia").textContent=S.nibpDia;
+    const sec=Math.floor((now()-S.nibpAt)/1000); $("#nibpAge").textContent=fmtClock(sec); $("#nibpSub").textContent="mmHg";
+  }
+  // CPR 顯示
+  $("#cprRate").textContent=S.cpr.rate||0;
+  $("#cprDepth").textContent=(S.cpr.depth||0).toFixed(1);
+  $("#qpct").textContent=S.cpr.active?S.cpr.quality+"%":"—";
+  $("#qring").style.setProperty("--p",S.cpr.active?S.cpr.quality:0);
+  $("#qring").style.background=`conic-gradient(${S.cpr.quality>70?'var(--ok)':S.cpr.quality>40?'var(--warn)':'var(--alarm)'} calc(var(--p)*1%),#1b2233 0)`;
+  // 警報
+  $("#vSpO2").classList.toggle("alarm", S.hasPulse && S.spo2<90);
+  $("#vHR").classList.toggle("alarm", r.shockable || (r.organized && (S.hr<50||S.hr>150)));
+  $("#vABP").classList.toggle("alarm", S.hasPulse && (S.sys<90));
+  $("#vCO2").classList.toggle("alarm", S.etco2<10 && r.short!=="ROSC");
+}
+function clockTick(){ /* placeholder */ }
+let clockLast=0;
+function scheduleClock(){
+  const t=now();
+  if(t-clockLast<500) return; clockLast=t;
+  $("#clock").textContent=fmtClock(Math.floor((t-S.startT)/1000));
+}
+function fmtClock(s){ const m=Math.floor(s/60),ss=s%60; return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0"); }
+
+/* =========================================================
+   除顫 / 整流 / 節律
+   ========================================================= */
+function chargeDefib(){
+  S.charged=true; log("ev",`充電至 ${S.energy} J（${S.defMode==="sync"?"同步整流":"去顫"}）`);
+  renderDeck(); 
+  // 充電音效感（視覺）
+  setTimeout(()=>{ const b=$("#shockBtn"); if(b){b.style.boxShadow="0 0 0 2px #fff,0 8px 30px #ff3b5c";} },50);
+}
+function deliverShock(){
+  if(!S.charged) return;
+  S.charged=false; clk.shockFlash=0.18;
+  S.stat.shocks++; if(!S.stat.firstShockT) S.stat.firstShockT=now()-S.startT;
+  const r=effRhythm();
+  if(S.defMode==="sync"){
+    log("sh",`同步整流 ${S.energy} J 放電`);
+    if(["svt","afib","vt_pulse"].includes(S.rhythm)){
+      if(Math.random()<0.8){ convertTo("nsr","整流成功 → 竇性節律"); }
+      else log("ev","整流後仍為原節律，考慮提高能量");
+    } else log("ev","此節律不需同步整流");
+  } else {
+    log("sh",`去顫 ${S.energy} J 放電`);
+    if(r.shockable){
+      let p=0.45 + (S.energy>=150?0.15:0) + qualityFactor()*0.18 + drugBoost();
+      p=clamp(p,0.1,0.9);
+      if(Math.random()<p){
+        // 成功 → 多半進入有組織節律，少部分立即 ROSC
+        if(Math.random()<0.5 && S.stat.shocks>=2){ achieveROSC(); }
+        else convertTo("pea","電擊終止顫動 → 出現有組織節律（檢查脈搏！）");
+      } else {
+        log("ev","電擊後仍為可電擊節律，立即恢復按壓");
+      }
+    } else {
+      log("ev","非可電擊節律，去顫無效——確認節律與脈搏");
+    }
+  }
+  renderDeck();
+}
+function convertTo(key,msg){ applyRhythmDefaults(key); if(msg)log("gd",msg); pushStatus(); }
+function achieveROSC(){
+  applyRhythmDefaults("rosc");
+  S.hasPulse=true; S.stat.roscT=now()-S.startT;
+  log("gd","🎉 自發循環恢復（ROSC）！轉入心臟停止後照護");
+  pushStatus();
+}
+function drugBoost(){
+  let b=0; const t=now();
+  S.drugs.forEach(d=>{ if(t<d.until){ if(d.key==="epi")b+=0.08; if(d.key==="amio")b+=0.14; } });
+  return b;
+}
+function measureNIBP(){
+  if(S.hasPulse){ S.nibpSys=Math.round(S.sys+rnd(-4,4)); S.nibpDia=Math.round(S.dia+rnd(-3,3)); }
+  else { S.nibpSys="無法測得"; S.nibpDia="--"; }
+  S.nibpAt=now(); log("ev","NIBP 測量完成"); 
+}
+
+/* 節律器 */
+function setPacer(on){ S.pace.on=on; if(!on)S.pace.mA=0; log("ev",on?"啟動經皮節律器":"關閉節律器"); }
+
+/* =========================================================
+   ACLS 藥效引擎
+   ========================================================= */
+const DRUGS=[
+  {key:"epi", n:"腎上腺素 Epinephrine", dose:"1 mg IV，每 3–5 分", apply:()=>{
+    S.drugs.push({key:"epi",until:now()+240000});
+    if(!S.hasPulse) log("dg","給予腎上腺素：提升冠狀動脈灌流，下一次電擊成功率上升");
+    else { S.hr=clamp(S.hr+20,40,170); S.sys=clamp(S.sys+25,60,200); S.dia=clamp(S.dia+12,40,120);
+      log("dg","給予腎上腺素：心率、血壓上升"); }
+  }},
+  {key:"amio", n:"胺碘酮 Amiodarone", dose:"300 mg IV（首劑）", apply:()=>{
+    S.drugs.push({key:"amio",until:now()+300000});
+    log("dg","給予胺碘酮：頑固性 VF/pVT 之抗心律不整，提高轉復率");
+  }},
+  {key:"atropine", n:"阿托品 Atropine", dose:"1 mg IV，每 3–5 分", apply:()=>{
+    if(["sinus_brady","avb3"].includes(S.rhythm)){
+      if(S.rhythm==="avb3"){ log("dg","給予阿托品：對完全阻滯多無效，準備經皮節律或升壓素"); }
+      else { S.hr=clamp(S.hr+28,50,110); log("dg","給予阿托品：竇性心搏過緩心率上升"); }
+    } else log("dg","給予阿托品：目前節律無明顯適應症");
+  }},
+  {key:"adenosine", n:"腺苷 Adenosine", dose:"6 mg 快推（次劑 12 mg）", apply:()=>{
+    if(S.rhythm==="svt"){
+      log("dg","給予腺苷：短暫房室阻滯…");
+      const prev=S.rhythm; applyRhythmDefaults("asystole",false); S.etco2=0;
+      setTimeout(()=>{ convertTo("nsr","腺苷後轉復為竇性節律"); },1600);
+    } else log("dg","給予腺苷：僅對節律規則之窄複波上心室頻脈有效");
+  }},
+  {key:"lidocaine", n:"利多卡因 Lidocaine", dose:"1–1.5 mg/kg IV", apply:()=>{
+    S.drugs.push({key:"amio",until:now()+240000}); // 視為抗心律不整替代
+    log("dg","給予利多卡因：胺碘酮替代之抗心律不整");
+  }},
+  {key:"bicarb", n:"碳酸氫鈉 NaHCO₃", dose:"1 mEq/kg IV", apply:()=>{
+    log("dg","給予碳酸氫鈉：考慮高血鉀／三環抗憂鬱劑中毒等特定情境");
+  }},
+];
+function giveDrug(key){
+  const d=DRUGS.find(x=>x.key===key); if(!d)return;
+  d.apply(); S.stat.drugLog.push({t:Math.floor((now()-S.startT)/1000), n:d.n}); pushStatus();
+}
+
+/* =========================================================
+   事件記錄
+   ========================================================= */
+const logEl=()=>$("#eventLog");
+const logBuf=[];
+function log(type,msg){
+  const t=fmtClock(Math.floor((now()-S.startT)/1000));
+  logBuf.unshift({t,type,msg}); if(logBuf.length>120)logBuf.pop();
+  const el=$("#eventLog"); if(el) renderLog();
+}
+function renderLog(){
+  const el=$("#eventLog"); if(!el)return;
+  el.innerHTML=logBuf.slice(0,40).map(l=>`<div><span class="t">${l.t}</span> <span class="${l.type}">${l.msg}</span></div>`).join("");
+}
+
+/* =========================================================
+   控制甲板渲染（依分頁）
+   ========================================================= */
+let tab="resus";
+function renderDeck(){
+  if(S.role==="instructor"){ tab="ctrl"; }
+  const d=$("#deck");
+  if(tab==="resus") d.innerHTML=deckResus();
+  else if(tab==="drug") d.innerHTML=deckDrug();
+  else if(tab==="ctrl") d.innerHTML=deckCtrl();
+  else if(tab==="report"){ openReport(); tab="resus"; setActiveTab("resus"); d.innerHTML=deckResus(); }
+  else d.innerHTML=deckResus();
+  wireDeck();
+  renderLog();
+}
+function deckResus(){
+  const r=effRhythm();
+  return `
+  <div class="grid" style="grid-template-columns:1.4fr 1fr;gap:16px">
+   <div>
+    <h3>⚡ 多功能電擊器</h3>
+    <div class="seg" style="margin-bottom:10px">
+      ${["manual:手動去顫","sync:同步整流","aed:AED","pace:經皮節律"].map(x=>{const[k,n]=x.split(":");
+        return `<button data-mode="${k}" class="${S.defMode===k?'on':''}">${n}</button>`}).join("")}
+    </div>
+    ${S.defMode==="pace"? pacePanel() : defibPanel(r)}
+   </div>
+   <div>
+    <h3>💗 CPR 操作 ＋ 事件記錄</h3>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn green" id="doComp">按壓一次（空白鍵）</button>
+      <button class="btn" id="toggleCpr">${S.cpr.active?"暫停按壓":"開始按壓"}</button>
+      <button class="btn" id="nibpBtn">量 NIBP</button>
+    </div>
+    <div class="log" id="eventLog"></div>
+   </div>
+  </div>`;
+}
+function defibPanel(r){
+  const levels=[120,150,200,300,360];
+  return `
+  <div class="energy" style="margin-bottom:10px">
+    <button class="btn" id="eMinus">−</button>
+    <div class="j">${S.energy}<small> J</small></div>
+    <button class="btn" id="ePlus">＋</button>
+    <div class="seg">${levels.map(j=>`<button data-e="${j}" class="${S.energy===j?'on':''}">${j}</button>`).join("")}</div>
+  </div>
+  ${S.defMode==="aed"? `
+    <div class="row">
+      <button class="btn" id="aedAnalyze">分析心律</button>
+      <span class="mono" style="color:${r.shockable?'var(--alarm)':'var(--ecg)'}">${S._aed||"按「分析心律」開始"}</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn charge" id="chargeBtn" ${r.shockable?'':'disabled'}>充電</button>
+      <button class="btn shock" id="shockBtn" ${S.charged?'':'disabled'}>電擊</button>
+    </div>`
+  : `
+    <div class="row">
+      <button class="btn charge" id="chargeBtn">充電 ${S.energy} J</button>
+      <button class="btn shock" id="shockBtn" ${S.charged?'':'disabled'}>${S.charged?'⚡ 放電':'未充電'}</button>
+    </div>
+    <div class="hint">可電擊節律：VF／無脈性 VT／TdP。${S.defMode==="sync"?"同步整流用於有脈之 VT／SVT／AF。":""}</div>`}
+  `;
+}
+function pacePanel(){
+  return `
+  <div class="slider"><label>節律 (ppm)</label><input type="range" id="paceRate" min="40" max="120" value="${S.pace.rate}"><span class="v">${S.pace.rate}</span></div>
+  <div class="slider"><label>輸出 (mA)</label><input type="range" id="paceMA" min="0" max="120" value="${S.pace.mA}"><span class="v">${S.pace.mA}</span></div>
+  <div class="row">
+    <button class="btn ${S.pace.on?'green':''}" id="paceToggle">${S.pace.on?'節律器：開':'節律器：關'}</button>
+    <span class="mono" style="color:${S.pace.capturing?'var(--ecg)':'var(--muted)'}">${S.pace.on?(S.pace.capturing?'已奪獲（capture）':'未奪獲：提高 mA'):'閾值約 '+S.pace.thresh+' mA'}</span>
+  </div>
+  <div class="hint">適應症：症狀性心搏過緩、完全房室傳導阻滯。緩慢提高 mA 直到每個節律訊號後出現寬大 QRS 並摸到脈搏。</div>`;
+}
+function deckDrug(){
+  return `
+  <h3>💊 ACLS 給藥</h3>
+  <div class="drugs">
+    ${DRUGS.map(d=>`<button class="drug" data-drug="${d.key}"><div class="n">${d.n}</div><div class="dose">${d.dose}</div></button>`).join("")}
+  </div>
+  <div class="hint">給藥後效果與下一次電擊成功率將動態反映於監視器；屬訓練簡化模型。</div>`;
+}
+function deckCtrl(){
+  const items=Object.entries(RHYTHMS).map(([k,v])=>`<button data-setr="${k}" class="${S.rhythm===k?'on':''}">${v.name}<div class="d mono">${v.short}${v.shockable?' · 可電擊':''}</div></button>`).join("");
+  return `
+  <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
+   <div>
+     <h3>🫀 設定心律（想出什麼就出什麼）</h3>
+     <div class="scen">${items}</div>
+   </div>
+   <div>
+     <h3>🎚️ 生命徵象</h3>
+     <div class="slider"><label>HR</label><input type="range" id="sHR" min="0" max="240" value="${S.hr}"><span class="v">${S.hr}</span></div>
+     <div class="slider"><label>SpO₂</label><input type="range" id="sSpo2" min="40" max="100" value="${S.spo2}"><span class="v">${S.spo2}</span></div>
+     <div class="slider"><label>收縮壓</label><input type="range" id="sSys" min="0" max="220" value="${S.sys}"><span class="v">${S.sys}</span></div>
+     <div class="slider"><label>舒張壓</label><input type="range" id="sDia" min="0" max="140" value="${S.dia}"><span class="v">${S.dia}</span></div>
+     <div class="slider"><label>EtCO₂</label><input type="range" id="sCo2" min="0" max="60" value="${S.etco2}"><span class="v">${S.etco2}</span></div>
+     <div class="slider"><label>RR</label><input type="range" id="sRR" min="0" max="40" value="${S.rr}"><span class="v">${S.rr}</span></div>
+     <div class="row"><label class="mono" style="font-size:12px;color:var(--muted)"><input type="checkbox" id="sPulse" ${S.hasPulse?'checked':''}> 有脈搏</label></div>
+   </div>
+   <div>
+     <h3>🧪 情境快速注入</h3>
+     <div class="scen">
+       <button data-scen="vf">突發 VF 倒下<div class="d">目擊心臟停止，須立即電擊</div></button>
+       <button data-scen="asys">心搏停止<div class="d">不可電擊，強調高品質 CPR＋腎上腺素</div></button>
+       <button data-scen="pea">PEA<div class="d">有電氣無脈搏，找 5H5T</div></button>
+       <button data-scen="stemi">胸痛 STEMI<div class="d">ST 段上升，啟動心導管</div></button>
+       <button data-scen="svt">陣發性 SVT<div class="d">迷走→腺苷→整流</div></button>
+       <button data-scen="brady">症狀性心搏過緩<div class="d">阿托品→經皮節律</div></button>
+       <button data-scen="tdp">尖端扭轉<div class="d">硫酸鎂、去顫</div></button>
+       <button data-scen="rosc">給予 ROSC<div class="d">轉入停止後照護</div></button>
+     </div>
+     <div class="hint">${S.net?`已連線：指令將即時推送至學員端（場次 ${S.code}）。`:`單機模式：設定立即套用於本機監視器。`}</div>
+   </div>
+  </div>`;
+}
+
+/* 控制甲板事件綁定 */
+function wireDeck(){
+  $$("#deck [data-mode]").forEach(b=>b.onclick=()=>{S.defMode=b.dataset.mode;S.charged=false;renderDeck();});
+  $$("#deck [data-e]").forEach(b=>b.onclick=()=>{S.energy=+b.dataset.e;S.charged=false;renderDeck();});
+  const ep=$("#ePlus"),em=$("#eMinus");
+  if(ep)ep.onclick=()=>{S.energy=clamp(S.energy+10,50,360);S.charged=false;renderDeck();};
+  if(em)em.onclick=()=>{S.energy=clamp(S.energy-10,50,360);S.charged=false;renderDeck();};
+  const cb=$("#chargeBtn"); if(cb)cb.onclick=chargeDefib;
+  const sb=$("#shockBtn"); if(sb)sb.onclick=deliverShock;
+  const aa=$("#aedAnalyze"); if(aa)aa.onclick=()=>{const r=effRhythm();S._aed=r.shockable?"建議電擊（Shock advised）":"不建議電擊，繼續 CPR";renderDeck();};
+  const dc=$("#doComp"); if(dc)dc.onclick=compress;
+  const tc=$("#toggleCpr"); if(tc)tc.onclick=()=>{S.cpr.active?stopCpr():startCpr();renderDeck();};
+  const nb=$("#nibpBtn"); if(nb)nb.onclick=measureNIBP;
+  // 節律器
+  const pr=$("#paceRate"); if(pr)pr.oninput=e=>{S.pace.rate=+e.target.value;e.target.nextElementSibling.textContent=S.pace.rate;};
+  const pm=$("#paceMA"); if(pm)pm.oninput=e=>{S.pace.mA=+e.target.value;e.target.nextElementSibling.textContent=S.pace.mA;};
+  const pt=$("#paceToggle"); if(pt)pt.onclick=()=>{setPacer(!S.pace.on);renderDeck();};
+  // 藥物
+  $$("#deck [data-drug]").forEach(b=>b.onclick=()=>giveDrug(b.dataset.drug));
+  // 教官
+  $$("#deck [data-setr]").forEach(b=>b.onclick=()=>{ ctrlSetRhythm(b.dataset.setr); });
+  bindSlider("#sHR","hr"); bindSlider("#sSpo2","spo2"); bindSlider("#sSys","sys");
+  bindSlider("#sDia","dia"); bindSlider("#sCo2","etco2"); bindSlider("#sRR","rr");
+  const sp=$("#sPulse"); if(sp)sp.onchange=e=>{S.hasPulse=e.target.checked; ctrlPush("vitals");};
+  $$("#deck [data-scen]").forEach(b=>b.onclick=()=>injectScenario(b.dataset.scen));
+}
+function bindSlider(sel,key){
+  const el=$(sel); if(!el)return;
+  el.oninput=e=>{ S[key]=+e.target.value; e.target.nextElementSibling.textContent=e.target.value; ctrlPush("vitals"); };
+}
+function ctrlSetRhythm(k){ applyRhythmDefaults(k); renderDeck(); ctrlPush("rhythm"); log("ev","教官設定節律："+RHYTHMS[k].name); }
+function injectScenario(s){
+  const map={vf:"vfib",asys:"asystole",pea:"pea",stemi:"stemi",svt:"svt",brady:"sinus_brady",tdp:"torsades",rosc:"rosc"};
+  if(s==="rosc"){ achieveROSC(); renderDeck(); ctrlPush("rhythm"); return; }
+  applyRhythmDefaults(map[s]); 
+  log("ev","注入情境："+RHYTHMS[map[s]].name);
+  renderDeck(); ctrlPush("rhythm");
+}
+
+/* =========================================================
+   教官 ↔ 學員 同步（window.storage 共享鍵 + 輪詢）
+   ========================================================= */
+const hasStore = (typeof window!=="undefined" && window.storage && typeof window.storage.set==="function");
+function kCmd(){ return "tpsems:"+S.code+":cmd"; }
+function kStat(){ return "tpsems:"+S.code+":stat"; }
+async function ctrlPush(kind){
+  if(!(S.net && S.role==="instructor" && hasStore)) return;
+  try{
+    S.seqOut++;
+    await window.storage.set(kCmd(), JSON.stringify({
+      seq:S.seqOut, kind, ts:Date.now(),
+      st:{rhythm:S.rhythm,hr:S.hr,spo2:S.spo2,sys:S.sys,dia:S.dia,etco2:S.etco2,rr:S.rr,hasPulse:S.hasPulse}
+    }), true);
+  }catch(e){}
+}
+async function pushStatus(){
+  if(!(S.net && S.role==="trainee" && hasStore)) return;
+  try{
+    await window.storage.set(kStat(), JSON.stringify({
+      rhythm:S.rhythm, hr:S.hr, etco2:S.etco2, cpr:S.cpr.active, q:S.cpr.quality, shocks:S.stat.shocks, ts:Date.now()
+    }), true);
+  }catch(e){}
+}
+async function pollLoop(){
+  if(S.net && hasStore){
+    try{
+      if(S.role==="trainee"){
+        const res=await window.storage.get(kCmd(), true);
+        if(res&&res.value){ const c=JSON.parse(res.value);
+          if(c.seq>S.seqIn){ S.seqIn=c.seq; applyRemote(c); }
+        }
+      } else if(S.role==="instructor"){
+        const res=await window.storage.get(kStat(), true);
+        if(res&&res.value){ const st=JSON.parse(res.value); reflectTrainee(st); }
+      }
+      $("#netStat").classList.add("live");
+    }catch(e){ /* 鍵不存在等 */ }
+  }
+  setTimeout(pollLoop, 800);
+}
+function applyRemote(c){
+  const st=c.st; if(!st)return;
+  if(c.kind==="rhythm"){ applyRhythmDefaults(st.rhythm); }
+  Object.assign(S,{hr:st.hr,spo2:st.spo2,sys:st.sys,dia:st.dia,etco2:st.etco2,rr:st.rr,hasPulse:st.hasPulse});
+  syncRhythmTag();
+  log("ev","◀ 收到教官指令："+(c.kind==="rhythm"?RHYTHMS[st.rhythm].name:"更新生命徵象"));
+}
+function reflectTrainee(st){
+  $("#netTxt").textContent="學員："+RHYTHMS[st.rhythm].short+(st.cpr?" · CPR "+st.q+"%":"");
+}
+
+/* =========================================================
+   12 導程
+   ========================================================= */
+const LEADS=[
+  {id:"I",f:0.6,inv:false},{id:"aVR",f:0.9,inv:true},{id:"V1",f:0.7,rs:true},{id:"V4",f:1.1},
+  {id:"II",f:1.0},{id:"aVL",f:0.5},{id:"V2",f:0.9,rs:true},{id:"V5",f:1.15},
+  {id:"III",f:0.8},{id:"aVF",f:0.9},{id:"V3",f:1.0},{id:"V6",f:1.0},
+];
+const lead12={};
+function build12(){
+  const wrap=$("#ecg12"); wrap.innerHTML="";
+  LEADS.forEach(l=>{
+    const div=document.createElement("div"); div.className="lead";
+    div.innerHTML=`<span class="lbl">${l.id}</span>`;
+    const cv=document.createElement("canvas"); div.appendChild(cv); wrap.appendChild(div);
+    lead12[l.id]={cv,ctx:cv.getContext("2d"),x:0,lastY:null,cfg:l};
+  });
+  resize12();
+  $("#ecg12hint").textContent = effRhythm().st? "下壁（II/III/aVF）或前壁（V1–V4）導程可見 ST 段上升 → STEMI。" :
+    "各導程依心電軸投影與形態簡化生成，供型態辨識教學使用。";
+}
+function resize12(){
+  for(const k in lead12){ const c=lead12[k]; const r=c.cv.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    c.cv.width=r.width*dpr; c.cv.height=r.height*dpr; c.ctx.setTransform(dpr,0,0,dpr,0,0);
+    c.w=r.width; c.h=r.height; c.x=0; c.lastY=null; }
+}
+let raf12=null;
+function loop12(){
+  const speed=130, dt=0.016;
+  for(const k in lead12){
+    const c=lead12[k], cfg=c.cfg; const steps=Math.round(speed*dt);
+    for(let i=0;i<steps;i++){
+      c.x+=1; if(c.x>=c.w){c.x=0;c.lastY=null;}
+      c.ctx.clearRect(c.x,0,10,c.h);
+      // 以該通道自身相位
+      if(!c._t)c._t=Math.random()*2; c._t+=1/speed;
+      let v=lead12sample(cfg,c._t);
+      const y=c.h*0.6 - v*(c.h*0.34);
+      if(c.lastY!=null){ c.ctx.strokeStyle="#19f08a";c.ctx.lineWidth=1.4;c.ctx.shadowColor="#19f08a";c.ctx.shadowBlur=4;
+        c.ctx.beginPath();c.ctx.moveTo(c.x-1,c.lastY);c.ctx.lineTo(c.x,clamp(y,1,c.h-1));c.ctx.stroke();c.ctx.shadowBlur=0; }
+      c.lastY=clamp(y,1,c.h-1);
+    }
+  }
+  raf12=requestAnimationFrame(loop12);
+}
+function lead12sample(cfg,t){
+  const key=S.rhythm, r=RHYTHMS[key];
+  const rr=r.hr>0?60/r.hr:1;
+  let te=t%rr;
+  let base=ecgMorph(te,rr,key);
+  let v=base*cfg.f*(cfg.inv?-1:1);
+  if(cfg.rs){ // V1/V2 typical rS
+    v = (gauss(te,0.20,0.013,0.3) - gauss(te,0.21,0.016,1.1))*cfg.f;
+    if(!r.wide && key!=="vfib"&&key!=="asystole") v+=gauss(te,0.10,0.022,0.08);
+  }
+  // STEMI 分區 ST 上升
+  if(r.st){
+    const inf=["II","III","aVF"], ant=["V1","V2","V3","V4"];
+    if(inf.includes(cfg.id)||ant.includes(cfg.id)){
+      v += (te>0.23&&te<0.40)? r.st : 0;
+    }
+    if(["I","aVL"].includes(cfg.id)) v -= (te>0.23&&te<0.40)? r.st*0.4:0; // 對應性壓低
+  }
+  return v;
+}
+
+/* =========================================================
+   品質報告
+   ========================================================= */
+function openReport(){
+  const el=$("#repBody");
+  const dur=Math.floor((now()-S.startT)/1000);
+  const ccf = S.stat.arrestStart? clamp(S.stat.cprActiveMs/((now()-S.stat.arrestStart))*100,0,100):0;
+  const rateOk = S.stat.compTotal? Math.round(S.stat.compInRange/S.stat.compTotal*100):0;
+  const depthOk= S.stat.compTotal? Math.round(S.stat.depthOk/S.stat.compTotal*100):0;
+  const bar=(v,c)=>`<div class="rep-line"><i style="width:${v}%;background:${c}"></i></div>`;
+  el.innerHTML=`
+    <div class="rep-grid">
+      <div class="rep-card"><div class="k">總時長</div><div class="v">${fmtClock(dur)}</div></div>
+      <div class="rep-card"><div class="k">總按壓次數</div><div class="v">${S.stat.compTotal}</div></div>
+      <div class="rep-card"><div class="k">電擊次數</div><div class="v">${S.stat.shocks}</div></div>
+      <div class="rep-card"><div class="k">首次電擊</div><div class="v">${S.stat.firstShockT!=null?fmtClock(Math.floor(S.stat.firstShockT/1000)):"—"}</div></div>
+    </div>
+    <div class="rep-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="rep-card"><div class="k">按壓分數（CCF）目標 ≥60%</div><div class="v">${Math.round(ccf)}<small>%</small></div>${bar(ccf,ccf>=60?'var(--ok)':'var(--warn)')}</div>
+      <div class="rep-card"><div class="k">速率達標 100–120/分</div><div class="v">${rateOk}<small>%</small></div>${bar(rateOk,rateOk>=70?'var(--ok)':'var(--warn)')}</div>
+      <div class="rep-card"><div class="k">深度達標 5–6 cm</div><div class="v">${depthOk}<small>%</small></div>${bar(depthOk,depthOk>=70?'var(--ok)':'var(--warn)')}</div>
+    </div>
+    <div class="rep-grid" style="grid-template-columns:1fr 1fr">
+      <div class="rep-card"><div class="k">結果</div><div class="v" style="color:${S.stat.roscT!=null?'var(--ecg)':'var(--muted)'}">${S.stat.roscT!=null?'已達 ROSC':'尚未 ROSC'}</div>${S.stat.roscT!=null?`<div class="k" style="margin-top:6px">於 ${fmtClock(Math.floor(S.stat.roscT/1000))} 恢復自發循環</div>`:''}</div>
+      <div class="rep-card"><div class="k">用藥次數</div><div class="v">${S.stat.drugLog.length}</div></div>
+    </div>
+    <h3 style="margin:6px 0 8px">事件時間軸</h3>
+    <div class="timeline">${logBuf.slice().reverse().map(l=>`<div>${l.t}　${l.msg}</div>`).join("")||"（尚無事件）"}</div>
+    <div class="hint" style="margin-top:10px">CCF（Chest Compression Fraction）＝按壓時間 ÷ 心臟停止總時間；速率與深度達標率為訓練模型估計值。</div>
+  `;
+  $("#ovRep").classList.add("show");
+}
+
+/* =========================================================
+   分頁切換
+   ========================================================= */
+function setActiveTab(name){ $$(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===name)); }
+$$(".tab").forEach(b=>b.onclick=()=>{
+  const n=b.dataset.tab;
+  if(n==="ecg12"){ openOverlay("ov12"); build12(); if(!raf12)loop12(); return; }
+  if(n==="report"){ openReport(); return; }
+  tab=n; setActiveTab(n); renderDeck();
+});
+function openOverlay(id){ $("#"+id).classList.add("show"); }
+$$("[data-close]").forEach(b=>b.onclick=()=>{
+  const id=b.dataset.close; $("#"+id).classList.remove("show");
+  if(id==="ov12" && raf12){ cancelAnimationFrame(raf12); raf12=null; }
+});
+
+/* =========================================================
+   啟動流程
+   ========================================================= */
+$$(".role").forEach(b=>b.onclick=()=>{
+  $$(".role").forEach(x=>x.classList.remove("sel")); b.classList.add("sel");
+  const role=b.dataset.role;
+  $("#codeField").style.display = role==="solo"?"none":"flex";
+});
+$("#genCode").onclick=()=>{ $("#sessCode").value="ER"+Math.floor(1000+Math.random()*9000); };
+$("#startBtn").onclick=()=>{
+  const role=$(".role.sel").dataset.role;
+  S.role=role;
+  if(role!=="solo"){
+    S.code=($("#sessCode").value||"ER0000").toUpperCase().replace(/\s/g,"");
+    S.net=true;
+    if(!hasStore){ S.net=false; }
+  }
+  bootApp();
+};
+function bootApp(){
+  $("#boot").style.display="none";
+  $("#app").style.display="flex";
+  // 通道設定（baseline 與 amp 於 resize 後依高度設定）
+  setupCanvas("cEcg","#19f08a",0,0);
+  setupCanvas("cPleth","#2ad4ff",0,0);
+  setupCanvas("cAbp","#ff4d5e",0,0);
+  setupCanvas("cCo2","#ffd54a",0,0);
+  setupCanvas("cCpr","#7c8dff",0,0);
+  layoutAmps();
+  applyRhythmDefaults(S.rhythm);
+  // 角色 UI
+  $("#codeShow").textContent = S.net? S.code : "單機";
+  $("#netTxt").textContent = S.net? (S.role==="instructor"?"教官端":"學員端") : "單機";
+  if(S.net) $("#netStat").classList.add("live");
+  if(S.role==="instructor"){ $("#ctrlTab").classList.add("on"); $$(".tab").forEach(t=>{if(t.dataset.tab!=="ctrl")t.style.display="none";}); }
+  if(S.role==="trainee"){ $("#ctrlTab").style.display="none"; }
+  // 學員/單機顯示大圓按壓鈕
+  if(S.role!=="instructor"){ $("#tapCpr").style.display="block"; }
+  renderDeck();
+  if(S.role==="instructor"){ setActiveTab("ctrl"); }
+  requestAnimationFrame(frame);
+  pollLoop();
+  log("ev","系統啟動 · "+(S.net?("場次 "+S.code+"／"+(S.role==="instructor"?"教官端":"學員端")):"單機合一"));
+}
+function layoutAmps(){
+  resizeCanvases();
+  // 依各通道高度設定 baseline / 振幅
+  const cfg={
+    cEcg:{b:.55,a:.42}, cPleth:{b:.78,a:.6}, cAbp:{b:.82,a:.62}, cCo2:{b:.92,a:.78}
+  };
+  for(const id in cfg){ const c=channels[id]; if(!c)continue;
+    c.baseline=c.h*cfg[id].b; c.ampPx=c.h*cfg[id].a; }
+}
+window.addEventListener("resize",()=>{ layoutAmps(); if($("#ov12").classList.contains("show"))resize12(); });
+
+/* 鍵盤：空白鍵按壓、S 充電、D 放電 */
+window.addEventListener("keydown",e=>{
+  if($("#app").style.display==="none")return;
+  if(e.code==="Space"){ e.preventDefault(); if(S.role!=="instructor") compress(); }
+  if(e.key==="s"||e.key==="S"){ if(!S.charged && effRhythm().shockable) chargeDefib(); }
+  if(e.key==="d"||e.key==="D"){ deliverShock(); }
+});
+$("#tapCpr").addEventListener("pointerdown",e=>{ e.preventDefault(); compress(); });
+
+</script>
+</body>
+</html>
