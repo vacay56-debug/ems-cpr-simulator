@@ -1,83 +1,83 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本檔案為 Claude Code（claude.ai/code）在此儲存庫中作業時提供的指引。
 
-## Project Overview
+## 專案概述
 
-TPS-EMS 韌性急救訓練模擬系統 is a browser-based EMS/CPR training simulator for Taiwan's pre-hospital emergency care education. The entire application is a **single self-contained file**: `index.html` — no build system, no dependencies, no package manager.
+TPS-EMS 韌性急救訓練模擬系統是一套針對台灣到院前緊急救護教學設計的瀏覽器端 CPR 訓練模擬器。整個應用程式是**單一自含檔案**：`index.html`——無建置系統、無外部相依、無套件管理器。
 
-## Running the App
+## 執行應用程式
 
-Open `index.html` directly in a browser — no server required. For quick local testing with a live-reload workflow:
+直接在瀏覽器中開啟 `index.html` 即可，不需要伺服器。若要搭配即時重載進行本機測試：
 
 ```sh
 python3 -m http.server 8080
-# then open http://localhost:8080
+# 然後開啟 http://localhost:8080
 ```
 
-There are no lint commands, no test suite, and no CI pipeline.
+本專案沒有 lint 指令、沒有測試套件、也沒有 CI 流程。
 
-## Architecture
+## 架構
 
-The application is pure HTML + vanilla JS in a single `<script>` block (~900 lines). The overall data flow is:
+應用程式為純 HTML + 原生 JS，全部寫在單一 `<script>` 區塊（約 900 行）。整體資料流如下：
 
 ```
-State (S) → applyRhythmDefaults() → advancePhase() → sampleChannels() → Canvas sweep render
+State (S) → applyRhythmDefaults() → advancePhase() → sampleChannels() → Canvas 掃描渲染
                                                                        → updateVitalsUI()
 ```
 
-### Core objects
+### 核心物件
 
-| Symbol | Purpose |
-|--------|---------|
-| `S` | Single global state object: rhythm, vitals, CPR state, pacing, drug list, stats |
-| `RHYTHMS` | 14 cardiac rhythm definitions (name, HR, shockable, organized, pulse, wide, etc.) |
-| `DRUGS` | 6 ACLS drug definitions with `apply()` closures that mutate `S` |
-| `clk` | Wave clock: `master` time, `beatT0`/`atrialT0`/`respT0` phase origins, `rr` interval |
-| `channels` | Canvas render targets keyed by canvas ID (`cEcg`, `cPleth`, `cAbp`, `cCo2`, `cCpr`) |
-| `lead12` | Separate canvas map for the 12-lead ECG overlay |
+| 符號 | 用途 |
+|------|------|
+| `S` | 全域狀態物件：心律、生命徵象、CPR 狀態、節律器、用藥清單、統計數據 |
+| `RHYTHMS` | 14 種心律定義（名稱、HR、可電擊、有組織、有脈搏、寬 QRS 等屬性） |
+| `DRUGS` | 6 種 ACLS 藥物定義，各含直接修改 `S` 的 `apply()` 閉包 |
+| `clk` | 波形時鐘：`master` 主時間、`beatT0`／`atrialT0`／`respT0` 相位起點、`rr` 間期 |
+| `channels` | 以 Canvas ID 為索引的渲染目標（`cEcg`、`cPleth`、`cAbp`、`cCo2`、`cCpr`） |
+| `lead12` | 12 導程 ECG 覆蓋層專用的獨立 Canvas 映射表 |
 
-### Waveform pipeline
+### 波形管線
 
-1. `advancePhase(dt)` — advances `clk.master` and rolls over beat/atrial/resp phase origins
-2. `sampleChannels()` — calls `ecgMorph`, `plethMorph`, `abpMorph`, `co2Morph` with current phase offset `te = clk.master - clk.beatT0`
-3. `frame()` — rAF loop; steps the above `Math.round(PX_PER_SEC * dt)` times per frame, drawing one pixel per step in sweep mode (erase 14px ahead, draw, advance x)
-4. `renderCprWave(dt)` — separate pass for the CPR channel using `sin(f * π)` pulse shape
+1. `advancePhase(dt)` — 推進 `clk.master`，並在每次心跳／心房／呼吸週期結束時重置相位起點
+2. `sampleChannels()` — 以當前相位偏移 `te = clk.master - clk.beatT0` 分別呼叫 `ecgMorph`、`plethMorph`、`abpMorph`、`co2Morph`
+3. `frame()` — rAF 主迴圈；每幀執行 `Math.round(PX_PER_SEC * dt)` 步，每步在掃描模式下畫一個像素（先清除前方 14px，再繪製並推進 x）
+4. `renderCprWave(dt)` — CPR 通道的獨立渲染，使用 `sin(f * π)` 脈衝形狀
 
-Waveform morphology uses Gaussian summation (`gauss(t, center, width, amplitude)`). Special cases: VF uses multi-sine noise (`vfWave`), asystole adds tiny drift, torsades uses a sinusoidal amplitude envelope.
+波形形態採用高斯疊加（`gauss(t, center, width, amplitude)`）。特殊情況：VF 使用多正弦疊加雜訊（`vfWave`）；心搏停止加入微小漂移；尖端扭轉使用正弦振幅包絡產生紡錘狀外觀。
 
-### CPR engine
+### CPR 引擎
 
-`compress()` is called on spacebar / floating button / "按壓一次" button. It records inter-press intervals in a rolling 8-sample buffer (`S.cpr.intervals`), computes rate, randomises depth (4.6–5.8 cm), and drives EtCO₂ up when pulseless. `qualityFactor()` returns 0–1 from rate score (target 100–120/min) and rhythm CV. `updateCprMetrics(dt)` auto-stops CPR if no press for 1.5 s.
+`compress()` 由空白鍵、浮動大圓鈕或「按壓一次」按鈕觸發。它將每次按壓間隔記錄在 8 個樣本的滾動緩衝區（`S.cpr.intervals`），計算速率並隨機產生深度（4.6–5.8 cm）；無脈搏時會拉升 EtCO₂。`qualityFactor()` 依速率分數（目標 100–120/min）與變異係數回傳 0–1。`updateCprMetrics(dt)` 在超過 1.5 秒未按壓時自動停止 CPR。
 
-### Defibrillation / Cardioversion
+### 除顫／整流
 
-`chargeDefib()` / `deliverShock()` implement probabilistic conversion. Shock success probability for shockable rhythms: base 0.45 + 0.15 if energy ≥ 150 J + CPR quality factor + drug boost (epinephrine +0.08, amiodarone +0.14). After ≥2 shocks with successful VF termination, there is a 50% chance of `achieveROSC()` vs. converting to PEA.
+`chargeDefib()` / `deliverShock()` 實作機率式轉復。可電擊心律的電擊成功機率：基礎 0.45 + 能量 ≥ 150 J 加 0.15 + CPR 品質因子 + 藥效加成（腎上腺素 +0.08、胺碘酮 +0.14）。成功終止 VF 且已累計 ≥2 次電擊後，有 50% 機率直接呼叫 `achieveROSC()`，否則轉為 PEA。
 
-### Instructor ↔ Trainee sync
+### 教官 ↔ 學員同步
 
-The three roles are **solo**, **trainee**, and **instructor**. When not solo:
+三種角色為**單機合一（solo）**、**學員端（trainee）**、**教官端（instructor）**。非單機模式下：
 
-- Uses `window.storage` (Claude Code platform API) via `hasStore` guard; polling interval 800 ms
-- Storage keys: `tpsems:{code}:cmd` (instructor → trainee) and `tpsems:{code}:stat` (trainee → instructor)
-- Commands carry a `seq` counter; `S.seqIn` prevents replaying the same command
-- `ctrlPush(kind)` — instructor sends rhythm/vitals state
-- `pushStatus()` — trainee sends CPR quality back to instructor
-- If `window.storage` is unavailable (plain browser), `S.net` is forced false and the app runs in solo mode silently
+- 透過 `hasStore` 守衛使用 `window.storage`（Claude Code 平台 API），輪詢間隔 800 ms
+- 儲存鍵：`tpsems:{code}:cmd`（教官 → 學員）與 `tpsems:{code}:stat`（學員 → 教官）
+- 指令帶有 `seq` 序號；`S.seqIn` 防止重複執行同一指令
+- `ctrlPush(kind)` — 教官推送心律／生命徵象狀態
+- `pushStatus()` — 學員回傳 CPR 品質給教官
+- 若 `window.storage` 不存在（一般瀏覽器），`S.net` 會靜默強制設為 false，以單機模式運行
 
-### Control deck rendering
+### 控制甲板渲染
 
-`renderDeck()` writes `innerHTML` for the bottom panel based on the active `tab` variable (`resus`, `drug`, `ctrl`). `wireDeck()` re-binds all events after every re-render. The "report" tab opens `#ovRep` overlay instead of setting deck content.
+`renderDeck()` 依目前 `tab` 變數（`resus`、`drug`、`ctrl`）以 `innerHTML` 重繪底部面板。`wireDeck()` 在每次重繪後重新綁定所有事件。「report」分頁會開啟 `#ovRep` 覆蓋層而非設定甲板內容。
 
-### 12-lead ECG overlay
+### 12 導程 ECG 覆蓋層
 
-`build12()` / `loop12()` / `lead12sample()` run a separate independent rAF loop (`raf12`) when the overlay is open. Each lead applies a per-lead amplitude factor (`cfg.f`) and inversion flag to `ecgMorph()`, with special handling for V1/V2 (rS pattern) and regional ST elevation for STEMI.
+`build12()` / `loop12()` / `lead12sample()` 在覆蓋層開啟時執行獨立的 rAF 迴圈（`raf12`）。每個導程對 `ecgMorph()` 的輸出套用各自的振幅係數（`cfg.f`）與反相旗標，V1／V2 另有 rS 形態特殊處理，STEMI 時特定區域導程會疊加 ST 段上升。
 
-## Key Conventions
+## 重要慣例
 
-- All user-visible text is Traditional Chinese (zh-Hant-TW); comments are a mix of Chinese and English.
-- The `$` / `$$` aliases are local (`document.querySelector` / `querySelectorAll`). Do not confuse with jQuery.
-- `clamp(v,a,b)` and `rnd(a,b)` are local utilities; `now()` wraps `performance.now()`.
-- State is mutated directly on `S`; there is no immutability or reactive framework.
-- `renderDeck()` must be called after any state change that affects the control panel. Vitals UI updates automatically on every animation frame via `updateVitalsUI()`.
-- The `window.storage` API is a Claude Code remote-environment feature and is not standard browser localStorage. All network-dependent code is guarded by `hasStore`.
+- 所有使用者介面文字為繁體中文（zh-Hant-TW）；程式碼註解中英混用。
+- `$` / `$$` 是本地縮寫（`document.querySelector` / `querySelectorAll`），勿與 jQuery 混淆。
+- `clamp(v,a,b)` 與 `rnd(a,b)` 為本地工具函式；`now()` 包裝 `performance.now()`。
+- 狀態直接修改 `S` 上的屬性，不使用不可變性或響應式框架。
+- 任何影響控制面板的狀態變更後必須呼叫 `renderDeck()`。生命徵象 UI 則由 `updateVitalsUI()` 在每個動畫幀自動更新。
+- `window.storage` API 是 Claude Code 遠端執行環境的功能，並非標準瀏覽器 localStorage。所有依賴網路的程式碼均由 `hasStore` 守衛保護。
